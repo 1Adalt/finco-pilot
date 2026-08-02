@@ -1,0 +1,128 @@
+# ============================================================
+# FinCopilot MCP Server 配置
+# MCP 是推荐的外部工具和系统接入协议
+# Skill 承担能力抽象层，MCP 承担工具连接层
+# ============================================================
+
+mcp_servers:
+  - name: mcp-tx-system
+    display_name: 交易系统连接器
+    protocol: json-rpc-2.0
+    transport: http
+    endpoint: "https://tx-system.internal/api/mcp"
+    auth:
+      method: ak_sk
+      signature: HMAC-SHA256
+    tools:
+      - name: query_transactions
+        description: 查询账户交易流水
+        parameters:
+          account_id: string (必填)
+          time_range: {start: datetime, end: datetime}
+          limit: int (默认 100)
+        returns: list[Transaction]
+      - name: freeze_account
+        description: 冻结账户（需审批）
+        parameters:
+          account_id: string (必填)
+          reason: string (必填)
+          operator_id: string (必填)
+        returns: OperationResult
+      - name: unfreeze_account
+        description: 解冻账户
+        parameters:
+          account_id: string (必填)
+          freeze_order_id: string (必填)
+        returns: OperationResult
+    error_handling:
+      retry: 指数退避 (1s-2s-4s-8s)
+      max_retries: 3
+      fallback: 返回缓存数据 + 标注 stale
+    idempotency:
+      mechanism: idempotency_key header
+      dedup_window: 300s
+
+  - name: mcp-credit
+    display_name: 征信系统连接器
+    protocol: json-rpc-2.0
+    transport: http
+    endpoint: "https://credit.internal/api/mcp"
+    auth:
+      method: ak_sk
+      signature: HMAC-SHA256
+    tools:
+      - name: query_credit_report
+        description: 查询个人/企业征信报告
+        parameters:
+          entity_id: string (必填)
+          report_type: enum[personal, enterprise]
+        returns: CreditReport
+      - name: query_credit_score
+        description: 查询信用评分
+        parameters:
+          entity_id: string (必填)
+        returns: CreditScore
+    error_handling:
+      retry: 指数退避
+      max_retries: 2
+      fallback: 返回最近一次缓存报告
+
+  - name: mcp-claims-system
+    display_name: 理赔系统连接器
+    protocol: json-rpc-2.0
+    transport: http
+    endpoint: "https://claims.internal/api/mcp"
+    auth:
+      method: ak_sk
+      signature: HMAC-SHA256
+    tools:
+      - name: query_policy
+        description: 查询保单详情
+        parameters:
+          policy_id: string (必填)
+        returns: PolicyRecord
+      - name: submit_claim
+        description: 提交理赔申请
+        parameters:
+          policy_id: string
+          claim_type: enum[car, health, property]
+          description: string
+          evidence: list[Evidence]
+        returns: ClaimResponse
+      - name: execute_payment
+        description: 执行赔付（需审批）
+        parameters:
+          claim_id: string
+          amount: float
+          payee_account: string
+        returns: PaymentResult
+    error_handling:
+      retry: 指数退避
+      max_retries: 2
+      fallback: 人工处理队列
+
+  - name: mcp-sentiment
+    display_name: 舆情监控 API 连接器
+    protocol: json-rpc-2.0
+    transport: http
+    endpoint: "https://sentiment-api.internal/api/mcp"
+    auth:
+      method: api_key
+      header: X-API-Key
+    tools:
+      - name: search_sentiment
+        description: 搜索实体相关舆情
+        parameters:
+          entity_name: string
+          time_range: {start: datetime, end: datetime}
+          platforms: list[enum[weibo, wechat, news, forum]]
+        returns: list[SentimentItem]
+      - name: get_sentiment_summary
+        description: 获取舆情摘要
+        parameters:
+          entity_name: string
+          period: enum[1d, 7d, 30d]
+        returns: SentimentSummary
+    error_handling:
+      retry: 1 次
+      fallback: 返回空结果 + 标注 API 不可用

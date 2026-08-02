@@ -1,0 +1,246 @@
+# ============================================================
+# FinCopilot Skill 清单
+# Skill 是本赛题必选项。每个 Skill 作为任务能力抽象层，
+# 定义清晰的输入/输出契约、依赖、失败处理和复用路径。
+# ============================================================
+
+skills:
+  - name: signal_aggregation
+    display_name: 多源信号聚合
+    version: "1.0.0"
+    description: >
+      从多个异构数据源接入风险信号，执行去重、格式标准化和优先级分级，
+      输出统一的标准化风险事件列表。
+    inputs:
+      - name: sources
+        type: list[DataSource]
+        description: 数据源列表（交易系统、征信、舆情、投诉）
+      - name: time_window
+        type: int
+        description: 去重时间窗口（秒），默认 300
+      - name: filters
+        type: dict
+        description: 可选过滤条件（金额范围、时间范围、事件类型）
+    outputs:
+      - name: events
+        type: list[RiskEvent]
+        description: 标准化风险事件列表
+      - name: stats
+        type: AggregationStats
+        description: 聚合统计信息
+    dependencies:
+      mcp: [mcp-tx-system, mcp-credit, mcp-sentiment]
+      internal: []
+    failure_handling:
+      timeout: 30s
+      retry: 3 次指数退避
+      fallback: 返回已成功聚合的部分数据 + 标注失败源
+    security:
+      data_masking: PII 字段自动脱敏（姓名/身份证/银行卡号）
+      access_control: 只读，不执行写操作
+      audit: 记录每次调用的 source、timestamp、result_hash
+    reusability:
+      scenarios: [信贷审批信号聚合, 反洗钱可疑交易聚合, 舆情监控聚合]
+      configurable: 数据源、去重策略、优先级规则均可配置
+    agent_flow:
+      called_by: risk_aggregator
+      triggers: 定时轮询 / 事件驱动
+
+  - name: fraud_detection
+    display_name: 欺诈检测引擎
+    version: "1.0.0"
+    description: >
+      对标准化风险事件执行多维度欺诈检测，包括规则引擎初筛、
+      RAG 历史案例匹配、LLM 推理分析，输出欺诈评分和匹配模式。
+    inputs:
+      - name: risk_event
+        type: RiskEvent
+        description: 待检测的标准化风险事件
+      - name: history_cases
+        type: list[CaseRecord]
+        description: RAG 检索到的历史相似案例
+      - name: detection_rules
+        type: list[FraudRule]
+        description: 欺诈检测规则集
+    outputs:
+      - name: fraud_score
+        type: float
+        description: 欺诈风险评分（0-100）
+      - name: matched_patterns
+        type: list[FraudPattern]
+        description: 匹配到的欺诈模式
+      - name: analysis_detail
+        type: str
+        description: LLM 分析详情（含推理链）
+      - name: confidence
+        type: float
+        description: 置信度（0-1）
+    dependencies:
+      mcp: [mcp-credit]
+      internal: [case_review 知识库]
+    failure_handling:
+      timeout: 60s
+      retry: 2 次
+      fallback: 仅使用规则引擎结果 + 标注 LLM 不可用
+    security:
+      data_masking: 输入数据脱敏后传入 LLM
+      access_control: 只读
+      audit: 记录检测规则版本、模型版本、RAG 检索结果
+    reusability:
+      scenarios: [信贷审批反欺诈, 保险理赔反欺诈, 反洗钱可疑交易检测]
+      configurable: 规则集、阈值、模型均可配置
+    agent_flow:
+      called_by: risk_analyzer
+      triggers: 收到 RiskEvent 时自动触发
+
+  - name: claim_assessment
+    display_name: 理赔评估
+    version: "1.0.0"
+    description: >
+      对保险理赔申请进行自动评估，包括保单校验、损失核定、
+      赔付金额计算和评估报告生成。
+    inputs:
+      - name: claim_request
+        type: ClaimRequest
+        description: 理赔申请（含保单号、事故描述、证据材料）
+      - name: policy_data
+        type: PolicyRecord
+        description: 保单详情（从 MCP 获取）
+    outputs:
+      - name: assessment_result
+        type: AssessmentResult
+        description: 评估结果（通过/拒绝/待人工审核）
+      - name: recommended_amount
+        type: float
+        description: 建议赔付金额
+      - name: assessment_report
+        type: str
+        description: 评估报告（含核保依据）
+    dependencies:
+      mcp: [mcp-claims-system]
+      internal: [fraud_detection]
+    failure_handling:
+      timeout: 45s
+      retry: 2 次
+      fallback: 升级至人工评估队列
+    security:
+      access_control: 需保单所属权限验证
+      audit: 记录评估决策依据
+    reusability:
+      scenarios: [车险理赔, 健康险理赔, 财产险理赔]
+      configurable: 险种规则、赔付计算逻辑、阈值
+    agent_flow:
+      called_by: risk_analyzer
+      triggers: 收到理赔请求时触发
+
+  - name: disposition_executor
+    display_name: 处置执行器
+    version: "1.0.0"
+    description: >
+      执行风险处置方案，包括自动执行（限额内）和审批升级（高风险），
+      所有操作记录回滚凭证，支持一键撤销。
+    inputs:
+      - name: disposition_plan
+        type: DispositionPlan
+        description: 处置方案（含操作列表）
+      - name: auth_context
+        type: AuthContext
+        description: 鉴权上下文（调用者身份、权限级别）
+    outputs:
+      - name: execution_result
+        type: ExecutionResult
+        description: 执行结果（含每个操作的 success/failure/rollback_token）
+      - name: approval_required
+        type: bool
+        description: 是否需要人工审批
+    dependencies:
+      mcp: [mcp-claims-system, mcp-tx-system]
+      internal: []
+    failure_handling:
+      timeout: 120s
+      retry: 1 次（仅幂等操作）
+      fallback: 全部操作标记为失败 + 通知人工介入
+      rollback: 基于 rollback_token 逐操作回滚
+    security:
+      approval_gate: 赔付 > 50000 元 / 账户冻结 / 拒保 → 强制审批
+      idempotency: 基于 idempotency_key 防重复执行
+      audit: 记录每个操作的执行参数、结果、时间戳
+    reusability:
+      scenarios: [任何需要审批+回滚的业务操作]
+      configurable: 审批阈值、操作白名单、回滚策略
+    agent_flow:
+      called_by: disposition_agent
+      triggers: 收到 DispositionPlan 时执行
+
+  - name: compliance_audit
+    display_name: 合规审计
+    version: "1.0.0"
+    description: >
+      对处置结果进行合规核验，匹配最新监管规则，生成不可篡改的
+      审计报告和证据包。
+    inputs:
+      - name: execution_result
+        type: ExecutionResult
+        description: 处置执行结果
+      - name: trace_data
+        type: TraceData
+        description: 全链路 Trace 数据
+      - name: regulation_version
+        type: str
+        description: 适用的法规版本
+    outputs:
+      - name: audit_report
+        type: AuditReport
+        description: 审计报告（含合规评分）
+      - name: evidence_package
+        type: EvidencePackage
+        description: 证据包（Trace+Log+Screenshot）
+    dependencies:
+      mcp: []
+      internal: [case_review 知识库写入]
+    failure_handling:
+      timeout: 30s
+      retry: 1 次
+      fallback: 生成部分审计报告 + 标注缺失项
+    security:
+      immutability: 审计报告 Hash 签名，链式存储
+      access_control: 只读，仅合规/审计角色可查看
+    reusability:
+      scenarios: [所有金融合规审计场景]
+      configurable: 法规库版本、评分规则
+    agent_flow:
+      called_by: compliance_auditor
+      triggers: 处置执行完成后自动触发
+
+  - name: case_review
+    display_name: 案例复盘
+    version: "1.0.0"
+    description: >
+      对已完成的风险事件进行复盘，提取关键经验，更新知识库和检测规则，
+      实现「每次处置都是一次学习」的持续进化。
+    inputs:
+      - name: case_data
+        type: CaseRecord
+        description: 完整案例数据（含全链路 Trace）
+    outputs:
+      - name: review_report
+        type: ReviewReport
+        description: 复盘报告（含经验总结、改进建议）
+      - name: new_rules
+        type: list[FraudRule]
+        description: 从案例中提取的新检测规则
+    dependencies:
+      mcp: []
+      internal: [知识库读写]
+    failure_handling:
+      timeout: 60s
+      retry: 2 次
+      fallback: 排队等待下次批处理
+    security:
+      data_retention: 案例数据脱敏后存储，保留 90 天
+    reusability:
+      scenarios: [所有需要经验积累的业务场景]
+      configurable: 复盘频率、提取策略
+    agent_flow:
+      called_by: compliance_auditor
+      triggers: 案例关闭后自动触发

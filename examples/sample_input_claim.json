@@ -1,0 +1,15 @@
+{
+  "task_id": "TASK-20250115-002",
+  "source": "claim_request",
+  "timestamp": "2025-01-15T11:00:00Z",
+  "policy_id": "POL-99887766",
+  "claim_type": "car",
+  "description": "车辆在高速路段发生追尾事故，前保险杠及引擎盖受损",
+  "amount": 35000,
+  "evidence": [
+    {"type": "photo", "url": "https://claims.example.com/evidence/001.jpg"},
+    {"type": "police_report", "url": "https://claims.example.com/evidence/001-report.pdf"}
+  ],
+  "account_id": "ACC-11223344",
+  "entity_name": "张三"
+}

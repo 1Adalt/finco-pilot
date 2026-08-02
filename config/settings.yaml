@@ -1,0 +1,85 @@
+# ============================================================
+# FinCopilot 全局配置
+# ============================================================
+
+project:
+  name: FinCopilot
+  version: "0.1.0"
+  description: 金融风控与理赔多智能体协同平台
+
+# AgentTeams 协同配置
+orchestration:
+  framework: AgentTeams
+  mode: sequential  # sequential | parallel | mixed
+  state_tracking: true
+  context_routing: auto
+  max_concurrent_agents: 4
+
+# Agent 执行顺序（Pipeline）
+pipeline:
+  stages:
+    - stage: aggregation
+      agent: risk_aggregator
+      skills: [signal_aggregation]
+      timeout: 60s
+    - stage: analysis
+      agent: risk_analyzer
+      skills: [fraud_detection, claim_assessment]
+      timeout: 120s
+      depends_on: [aggregation]
+    - stage: disposition
+      agent: disposition_agent
+      skills: [disposition_executor]
+      timeout: 180s
+      depends_on: [analysis]
+      approval_required_for: [large_payment, account_freeze, claim_denial]
+    - stage: audit
+      agent: compliance_auditor
+      skills: [compliance_audit, case_review]
+      timeout: 90s
+      depends_on: [disposition]
+
+# 审批阈值
+approval:
+  large_payment_threshold: 50000  # 元
+  require_approval_actions:
+    - account_freeze
+    - account_unfreeze
+    - claim_denial
+    - large_payment
+
+# 可观测配置
+observability:
+  enabled: true
+  standard: OpenTelemetry
+  trace:
+    exporter: otlp
+    endpoint: "http://localhost:4317"
+  metrics:
+    export_interval: 30s
+  log_level: INFO
+  genai_semantic_conventions: true
+
+# RAG 配置
+rag:
+  enabled: true
+  knowledge_bases:
+    - name: fraud_cases
+      type: vector
+      embedding_model: text-embedding-v3
+    - name: regulations
+      type: vector
+      embedding_model: text-embedding-v3
+  retrieval:
+    top_k: 5
+    similarity_threshold: 0.75
+
+# 安全配置
+security:
+  data_masking:
+    enabled: true
+    pii_fields: [name, id_card, phone, bank_account]
+  audit_log:
+    immutable: true
+    hash_algorithm: SHA-256
+    chain_storage: true

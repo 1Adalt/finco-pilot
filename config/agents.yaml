@@ -1,0 +1,130 @@
+# ============================================================
+# FinCopilot Agent Identity 清单
+# 说明多 Agent 系统中各 Agent 的身份属性、能力边界和协同关系
+# 对应参赛手册「附录 A」
+# ============================================================
+
+agents:
+  - id: risk_aggregator
+    name: RiskAggregator
+    display_name: 风险聚合 Agent
+    role: 多源信号汇聚与降噪专家
+    description: >
+      负责从交易系统、征信平台、舆情 API、投诉系统等多渠道接入风险信号，
+      执行去重、格式标准化和优先级分级（S0-S3），将原始信号转化为标准化
+      风险事件，传递给下游分析 Agent。
+    capabilities:
+      - 多源信号接入与协议适配（HTTP / MQ / gRPC）
+      - 事件去重（基于 idempotency_key + 时间窗口）
+      - 格式标准化（统一为 RiskEvent Schema）
+      - 优先级分级（S0-紧急 / S1-高 / S2-中 / S3-低）
+      - 异常模式预筛选（基于规则引擎初筛）
+    inputs:
+      - transaction_system: 交易流水数据
+      - credit_system: 征信报告
+      - sentiment_api: 舆情监控数据
+      - complaint_system: 客户投诉记录
+    outputs:
+      - standardized_risk_events: 标准化风险事件列表（含优先级标签）
+    collaborators:
+      - downstream: risk_analyzer
+    tools:
+      - mcp-tx-system
+      - mcp-credit
+      - mcp-sentiment
+    skills:
+      - signal_aggregation
+
+  - id: risk_analyzer
+    name: RiskAnalyzer
+    display_name: 风险分析 Agent
+    role: 根因定位与欺诈检测专家
+    description: >
+      对 RiskAggregator 输出的标准化风险事件进行多维度关联分析，
+      匹配欺诈模式，量化影响面，检索历史相似案例，生成根因报告和处置建议。
+    capabilities:
+      - 多维度关联分析（时间/空间/实体/交易图谱）
+      - 欺诈模式匹配（基于 RAG 检索历史案例 + 规则 + LLM 推理）
+      - 影响面量化评估（涉及金额、用户数、业务线）
+      - 历史案例相似度检索
+      - 处置建议生成（含置信度评分）
+    inputs:
+      - standardized_risk_events: 来自 RiskAggregator
+      - knowledge_base: RAG 风控知识库 + 历史案例库
+      - regulation_db: 法规库（合规要求参考）
+    outputs:
+      - root_cause_report: 根因分析报告
+      - fraud_score: 欺诈风险评分（0-100）
+      - impact_assessment: 影响面评估
+      - disposition_recommendations: 处置建议列表
+    collaborators:
+      - upstream: risk_aggregator
+      - downstream: disposition_agent
+    tools:
+      - mcp-credit
+      - mcp-tx-system
+    skills:
+      - fraud_detection
+      - claim_assessment
+
+  - id: disposition_agent
+    name: DispositionAgent
+    display_name: 处置执行 Agent
+    role: 理赔/授信处置执行专家
+    description: >
+      根据 RiskAnalyzer 输出的根因报告和处置建议，生成具体处置方案。
+      限额内自动执行（如小额理赔、账户标记），高风险动作（大额赔付、
+      账户冻结、拒保）自动升级至人工审批节点。所有操作记录回滚凭证。
+    capabilities:
+      - 处置方案生成（含操作步骤、参数、预期结果）
+      - 自动执行（限额内，基于权限矩阵）
+      - 高风险动作升级审批
+      - 执行回滚（基于回滚 Token）
+      - 处置状态追踪
+    inputs:
+      - root_cause_report: 来自 RiskAnalyzer
+      - disposition_recommendations: 来自 RiskAnalyzer
+      - business_rules: 业务规则配置
+      - auth_matrix: 权限矩阵（定义自动执行阈值）
+    outputs:
+      - disposition_order: 处置工单
+      - execution_result: 执行结果（成功/失败/待审批）
+      - rollback_token: 回滚凭证
+      - approval_request: 审批请求（高风险时）
+    collaborators:
+      - upstream: risk_analyzer
+      - downstream: compliance_auditor
+      - external: 人工审批节点
+    tools:
+      - mcp-claims-system
+      - mcp-tx-system
+    skills:
+      - disposition_executor
+
+  - id: compliance_auditor
+    name: ComplianceAuditor
+    display_name: 合规审计 Agent
+    role: 结果核验与合规审计专家
+    description: >
+      对 DispositionAgent 的执行结果进行核验，匹配合规规则，生成
+      不可篡改的审计轨迹和合规报告。自动归档证据包，支持监管审查。
+    capabilities:
+      - 处置结果核验（比对预期 vs 实际）
+      - 合规规则自动匹配（基于法规库 RAG）
+      - 审计轨迹生成（Hash 链式存储）
+      - 证据包归档（含 Trace/Log/Screenshot）
+      - 合规评分
+    inputs:
+      - execution_result: 来自 DispositionAgent
+      - compliance_rules: 法规库
+      - trace_data: 全链路 Trace 数据
+    outputs:
+      - verification_conclusion: 核验结论
+      - audit_report: 审计报告
+      - evidence_package: 证据包
+      - compliance_score: 合规评分（0-100）
+    collaborators:
+      - upstream: disposition_agent
+    skills:
+      - compliance_audit
+      - case_review

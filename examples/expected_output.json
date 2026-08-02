@@ -1,0 +1,32 @@
+{
+  "task_id": "TASK-20250115-001",
+  "status": "awaiting_approval",
+  "pipeline": {
+    "aggregation": {
+      "events_count": 4,
+      "sources": ["tx_system", "credit_system", "sentiment_api", "complaint_system"],
+      "high_severity": 2
+    },
+    "analysis": {
+      "fraud_score": 90.0,
+      "fraud_level": "high",
+      "matched_rules": ["HIGH_SEVERITY_MULTI_SOURCE"],
+      "historical_cases": ["CASE-2024-0032 (团伙欺诈_多账户协同)"],
+      "impact_level": "critical",
+      "estimated_loss": 517000
+    },
+    "disposition": {
+      "approval_required": true,
+      "approval_items": [
+        {"action": "freeze_account", "reason": "欺诈评分 90.0", "status": "pending_approval"}
+      ]
+    },
+    "audit": {
+      "compliance_score": 90,
+      "violations": [],
+      "warnings": [{"rule": "CBRC-2024-007", "detail": "缺少 Trace ID"}]
+    }
+  },
+  "rollback_capable": true,
+  "evidence_archived": true
+}

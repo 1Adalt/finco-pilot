@@ -1,0 +1,26 @@
+{
+  "task_id": "TASK-20250115-001",
+  "source": "fraud_alert",
+  "timestamp": "2025-01-15T10:30:00Z",
+  "account_id": "ACC-12345678",
+  "entity_id": "ENT-87654321",
+  "entity_name": "XX科技有限公司",
+  "transactions": [
+    {"tx_id": "TX-001", "amount": 85000, "to_account": "ACC-99999999", "note": "异常大额转账"},
+    {"tx_id": "TX-002", "amount": 32000, "to_account": "ACC-88888888", "note": "频繁小额转出"},
+    {"tx_id": "TX-003", "amount": 150000, "to_account": "ACC-77777777", "note": "跨境汇款"}
+  ],
+  "credit_data": {
+    "score": 420,
+    "recent_queries": 15,
+    "overdue_records": 3
+  },
+  "sentiment_items": [
+    {"platform": "weibo", "content": "XX科技疑似涉及诈骗，多人投诉", "timestamp": "2025-01-14T20:00:00Z"},
+    {"platform": "news", "content": "监管部门关注XX科技异常交易", "timestamp": "2025-01-15T08:00:00Z"}
+  ],
+  "complaints": [
+    {"id": "CMP-001", "type": "fraud_report", "description": "被诱导转账至XX科技账户", "amount": 50000},
+    {"id": "CMP-002", "type": "fraud_report", "description": "XX科技虚假宣传骗取投资", "amount": 200000}
+  ]
+}
