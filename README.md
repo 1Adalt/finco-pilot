@@ -27,7 +27,16 @@
 
 ---
 
-### 📦 快速开始
+### 📂 版本说明
+
+| 版本 | 目录 | 说明 |
+|------|------|------|
+| **v1** · 4-Agent 版 | 根目录 | RiskAggregator → RiskAnalyzer → DispositionAgent → ComplianceAuditor（4 步 Pipeline） |
+| **v2** · 3-Agent 版（推荐） | `v2-3agent/` | RiskDetective → DispositionAgent → ComplianceAuditor（3 步 Pipeline，更精简） |
+
+> 两个版本共享同一套 6 Skill + 4 MCP，Agent 决策逻辑一致，仅编排层不同。v2 版是最终提交版本。
+
+## 📦 快速开始
 
 ```bash
 # 克隆项目
