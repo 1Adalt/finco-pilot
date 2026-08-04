@@ -1,0 +1,66 @@
+# ============================================================
+# FinCopilot 3-Agent 版 Agent Identity 清单
+# ============================================================
+agents:
+  - id: risk_detective
+    name: RiskDetective
+    display_name: 风险感知 Agent
+    role: 信号聚合 + 欺诈检测 + 影响面评估
+    description: >
+      合并 4-Agent 版的 RiskAggregator 和 RiskAnalyzer，统一负责
+      多源信号接入、去重、标准化、优先级分级，以及根因定位、欺诈
+      模式匹配和影响面量化评估。将"感知"和"判断"内聚在同一 Agent，
+      减少中间传递延迟。
+    capabilities:
+      - 多源信号接入与协议适配
+      - 事件去重与格式标准化
+      - 优先级分级（S0-S3）
+      - 规则引擎初筛 + RAG 历史案例匹配 + LLM 推理
+      - 影响面量化评估
+      - 处置建议生成
+    inputs:
+      - transaction_system, credit_system, sentiment_api, complaint_system
+      - RAG 知识库（风控案例库 + 法规库）
+    outputs:
+      - 标准化风险事件列表 + 欺诈评分 + 影响面评估 + 处置建议
+    collaborators:
+      - downstream: disposition_agent
+    skills:
+      - signal_aggregation
+      - fraud_detection
+      - claim_assessment
+
+  - id: disposition_agent
+    name: DispositionAgent
+    display_name: 处置执行 Agent
+    role: 理赔/授信处置执行专家
+    description: >
+      根据 RiskDetective 的分析结果生成处置方案。限额内自动执行，
+      高风险动作升级人工审批。所有操作记录回滚凭证。
+    capabilities:
+      - 处置方案生成与执行
+      - 高风险升级审批
+      - 执行回滚
+    collaborators:
+      - upstream: risk_detective
+      - downstream: compliance_auditor
+    skills:
+      - disposition_executor
+
+  - id: compliance_auditor
+    name: ComplianceAuditor
+    display_name: 合规审计 Agent
+    role: 结果核验 + 合规审计 + 案例复盘
+    description: >
+      核验处置结果，匹配法规库，生成不可篡改的审计轨迹和证据包。
+      案例复盘并将经验写入知识库。
+    capabilities:
+      - 处置结果核验
+      - 合规规则匹配
+      - 审计轨迹生成
+      - 案例复盘与知识沉淀
+    collaborators:
+      - upstream: disposition_agent
+    skills:
+      - compliance_audit
+      - case_review

@@ -1,0 +1,23 @@
+# FinCopilot — 金融风控与理赔多智能体协同平台
+# 初赛 AgentTeams 代码包
+
+# AgentTeams 框架（必选）
+agentteams>=0.1.0
+
+# MCP 工具连接
+mcp>=1.0.0
+
+# 数据处理
+pydantic>=2.0.0
+pyyaml>=6.0
+
+# 可观测
+opentelemetry-api>=1.20.0
+opentelemetry-sdk>=1.20.0
+
+# RAG / 向量存储（推荐）
+# pgvector>=0.2.0  # 生产环境使用
+
+# 测试
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
